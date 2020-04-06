@@ -12,11 +12,12 @@ YELLOW = (255,   255,   0)
 BLACK  = (0,   0,   0)
 
 class Rect(pygame.sprite.Sprite):
-    def __init__(self,x,y,width,height,color):
+    def __init__(self,x,y,width,height,dir,color):
         super().__init__()
         self.image = pygame.Surface([width, height])
         self.image.fill(color)
         self.rect = self.image.get_rect()
+
         self.rect.centerx = x
         self.rect.centery = y
 
@@ -47,15 +48,20 @@ class field:
 
 class player(pygame.sprite.Sprite):
 
-    def __init__(self, id, posx, posy, thick, speed, dir, dirspeed, color, controls):
+    def __init__(self, id, points, posx, posy, thick, speed, dir, dirspeed, color, controls):
         pygame.sprite.Sprite.__init__(self)
         # Player ID
         self.id = id
+        # Player points
+        self.points = points
+        self.point_trigger = False
         # Player alive
         self.alive = True
         # Player position
         self.posx     = posx
         self.posy     = posy
+        self.posx_old = posx
+        self.posy_old = posy
         # Player thickness
         self.thick    = thick
         # The tracl each player leaves behind
@@ -67,7 +73,7 @@ class player(pygame.sprite.Sprite):
         self.max_no_gap       = 300
         self.orig_max_no_gap  = 300
         self.l_gap            = False
-        self.gap_length       = 25
+        self.gap_length       = 15
         # Player speed and direction
         self.speed     = speed
         self.dir       = dir
@@ -77,7 +83,7 @@ class player(pygame.sprite.Sprite):
         # Player control
         self.controls = controls
         # Image
-        self.rect  = Rect(self.posx-self.thick, self.posy-self.thick, self.thick*2, self.thick*2, self.color)
+        self.rect  = Rect(self.posx-self.thick, self.posy-self.thick, self.thick*2, self.thick*2, self.dir, self.color)
         # No collisiosn zone
         self.len_nocollide = 5
         self.nocollide     = [self.rect] * self.len_nocollide
@@ -114,14 +120,19 @@ class player(pygame.sprite.Sprite):
         # Draw the player
         self.draw(screen)
 
+        # Get points
+        self.get_points(players)
+
     def update_pos(self):
         # Keep direction between 0 and 360
         self.dir = self.dir % 360
         # Update the position
-        self.posx = self.posx + self.speed*np.cos(np.deg2rad(self.dir))
-        self.posy = self.posy + self.speed*np.sin(np.deg2rad(self.dir))
-        self.rect = Rect(self.posx-self.thick, self.posy-self.thick, self.thick*2, self.thick*2 ,self.color)
+        self.posx_old = self.posx
+        self.posy_old = self.posy
+        self.posx = self.posx_old + self.speed*np.cos(np.deg2rad(self.dir))
+        self.posy = self.posy_old + self.speed*np.sin(np.deg2rad(self.dir))
 
+        self.rect = Rect(self.posx-self.thick, self.posy-self.thick, self.thick*2, self.thick*2, self.dir, self.color)
 
 
     def update_dir(self, pressed):
@@ -130,7 +141,7 @@ class player(pygame.sprite.Sprite):
 
     def draw(self,screen):
         pygame.draw.circle(screen, YELLOW, (int(self.rect.rect.centerx),int(self.rect.rect.centery)), self.thick)
-        #pygame.draw.rect(screen, WHITE, self.nocollide)
+
 
 
     def gap(self):
@@ -151,6 +162,8 @@ class player(pygame.sprite.Sprite):
     def update_track(self,screen):
         if not self.l_gap:
             self.track.add(self.rect)
+            #print(pygame.draw.line(screen, self.color, (self.posx_old,self.posy_old), (self.posx,self.posy)))
+
         self.track.draw(screen)
 
     def update_no_collide(self, screen):
@@ -189,13 +202,15 @@ class player(pygame.sprite.Sprite):
                 for s in self.nocollide[1:]:
                     if s is not None:
                         nocollide_group.add(s)
-                [pygame.draw.rect(screen,WHITE,s) for s in nocollide_group] # Draw the no collision zone white
+                #[pygame.draw.rect(screen,WHITE,s) for s in nocollide_group] # Draw the no collision zone white
 
                 col_with_no_collzone   = pygame.sprite.spritecollideany(col_with_any_track, nocollide_group)
                 if col_with_no_collzone is None: # If it is not with your own most recent track you lost
                     self.alive = False
 
     def activate_effects(self, effects):
+        if not self.alive:
+            return
         for effect in effects:
             if not effect.active:
                 effect.active = True # Only activate effect once
@@ -241,6 +256,16 @@ class player(pygame.sprite.Sprite):
         if not self.alive:
             self.speed = 0
 
+    def get_points(self,players):
+        if not self.alive and not self.point_trigger:
+            self.point_trigger = True
+            for player in players:
+                if not player.id == self.id:
+                    if player.alive:
+                        player.points += 1
+
+        print('player {}: {}'.format(self.id, self.points))
+
 
 class effect:
     def __init__(self, cooldown=100, speed=0, thick=0, directionchanger=False, invisible=False, delete_track=False, group='', color=GREEN, name=''):
@@ -270,7 +295,7 @@ class item(pygame.sprite.Sprite):
         self.time_effect = 0
         self.max_time_effect = 10
         self.effect = effect
-        self.rect  = Rect(self.posx, self.posy, self.thick, self.thick, self.color)
+        self.rect  = Rect(self.posx, self.posy, self.thick, self.thick, 0, self.color)
         self.image = image
 
     def draw(self,screen):
@@ -286,11 +311,12 @@ class item(pygame.sprite.Sprite):
         if not playeritem is None and 'self' in self.effect.group: # Items for one self
             playeritem.effects.append(self.effect)
             self.kill() # Remove item once picked up
+
         if not playeritem is None and 'enemy' in self.effect.group: # Items for enemies
             for player in players: # Activate effects for all other players
                 if not player.id == playeritem.id and player.alive: # Excluding one self and dead players (otherwise dead players get fat)
                     player.effects.append(copy.deepcopy(self.effect))
-            self.kill() # Remove item once picked up
+                self.kill() # Remove item once picked up
 
     def update(self, screen, players):
         self.item_picked_up(screen, players)
@@ -309,25 +335,57 @@ class item(pygame.sprite.Sprite):
             gamefield.item_counter += 1
             items.add( item(id=gamefield.item_counter, posx=randx, posy=randy, thick=40, color=itemeffect.color, effect=itemeffect, image=images[itemeffect.name] ))
 
+
+def pause(event, paused):
+    if event.type == pygame.KEYDOWN:
+        if event.key == pygame.K_SPACE:
+            paused = not paused
+            print(paused)
+    return paused
+
+def exit_game(event, paused):
+    if paused:
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                return True
+    return False
+
+def display_points(screen,nx,npbox,ny, players):
+
+    fontsize = 25
+    font = pygame.font.Font('freesansbold.ttf', fontsize)
+
+    iy = 0 + ny // 10
+    for iplyr in players:
+        text = font.render('Player{}: {}'.format(iplyr.id,iplyr.points), True, iplyr.color, BLACK)
+        textRect = text.get_rect()
+        textRect.center = (nx + npbox // 2, iy)
+        screen.blit(text, textRect)
+
+        iy += fontsize
+
 def main():
     # Initialise the game
     pygame.init()
 
     # Set parameters for the game size
-    nx = 600
-    ny = 600
+    npbox = 200
+    nx    = 600
+    ny    = 600
 
     flags = DOUBLEBUF
 
     # Set up a screen
-    screen = pygame.display.set_mode([nx,ny], flags)
+    screen = pygame.display.set_mode([nx+npbox,ny], flags)
 
     # Set up a field for the game and draw it
     gamefield = field(nx=nx, ny=ny, thick=5, color=YELLOW)
 
-    match = 2
+    # Dictionary for points
+    points = {1:0, 2:0}
 
-    for game in range(match):
+    matchdone = False
+    while not matchdone:
 
         # Wait a second and then pause the game
         paused   = False
@@ -336,23 +394,23 @@ def main():
 
         clock = pygame.time.Clock()
 
-
+        # Fill every screen with black
+        screen.fill(BLACK)
 
         # Generate player
         players = pygame.sprite.Group()
-        players.add(player(id=1, posx=random.randint(0,gamefield.nx), posy=random.randint(0,gamefield.ny), thick=3, speed=1.2, dir=random.randint(0,360), dirspeed=2.5, color=BLUE, controls = {'left' : pygame.K_LEFT, 'right': pygame.K_RIGHT}))
-        #players.add(player(id=2, posx=random.randint(0,gamefield.nx), posy=random.randint(0,gamefield.ny), thick=3, speed=1.2, dir=random.randint(0,360), dirspeed=2.5, color=RED, controls = {'left' : pygame.K_2, 'right': pygame.K_9}))
-        #players.add(player(id=3, posx=random.randint(0,gamefield.nx), posy=random.randint(0,gamefield.ny), thick=3, speed=1.2, dir=random.randint(0,360), dirspeed=2.5, color=GREEN, controls = {'left' : pygame.K_a, 'right': pygame.K_s}))
+        players.add(player(id=1, points=points[1], posx=random.randint(0,gamefield.nx), posy=random.randint(0,gamefield.ny), thick=3, speed=1.8, dir=random.randint(0,360), dirspeed=3.0, color=RED, controls = {'left' : pygame.K_l, 'right': pygame.K_p}))
+        players.add(player(id=2, points=points[2], posx=random.randint(0,gamefield.nx), posy=random.randint(0,gamefield.ny), thick=3, speed=1.8, dir=random.randint(0,360), dirspeed=3.0, color=GREEN, controls = {'left' : pygame.K_a, 'right': pygame.K_s}))
 
         # Items is an empty list for starters
         items = pygame.sprite.Group()
 
         # Define some items effects
         effectlist = []
-        effectlist.append(effect(speed=2,               color=GREEN,            name='self_fast',               group='self'))
+        #effectlist.append(effect(speed=2,               color=GREEN,            name='self_fast',               group='self'))
         #effectlist.append(effect(directionchanger=True, color=RED,              name='enemy_directionchanger',  group='enemy'))
         #effectlist.append(effect(invisible=True, cooldown=300, color=YELLOW,    name='self_invisible',          group='self'))
-        #effectlist.append(effect(thick=3, cooldown=250, color=YELLOW,           name='enemy_fat',               group='enemy'))
+        effectlist.append(effect(thick=9, cooldown=250, color=YELLOW,           name='enemy_fat',               group='enemy'))
         #effectlist.append(effect(delete_track=True,     color=BLUE,             name='all_delete_track',        group=['enemy','self']))
 
         # Define the images for the items
@@ -368,24 +426,39 @@ def main():
         # Main loop
         while not gamedone:
             for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                            done = True
+
+                paused   = pause(event, paused)
+                matchdone = exit_game(event,paused)
+
+                if matchdone:
+                    gamedone = True
+
+                if done and not paused:
+                    gamedone = True
+
+
             if done:
-                gamedone = True
+                paused   = True
+
+                #Save points
+                for iplyr in players:
+                    points[iplyr.id] = iplyr.points
 
             pressed = pygame.key.get_pressed()
+
 
             # Fill every screen with black
             screen.fill(BLACK)
             # Draw the boundary
             gamefield.draw_boundary(screen)
 
+            display_points(screen,nx,npbox,ny,players)
+
             # Pause the game until space is hit, but only after 0.5 second
             seconds=(pygame.time.get_ticks()-start_ticks)/1000 #calculate how many seconds
             if seconds>0.3 and seconds <0.4:
                 paused = True
-            if pressed[pygame.K_SPACE]:
-                paused = False
+
 
             # Run the game if not paused
             if not paused:
@@ -402,14 +475,13 @@ def main():
                 # End game if all players are dead
                 done = any([player.alive for player in players])==False
 
-                if done:
-                    paused = True
-
                 # Update screen
                 #pygame.display.flip()
 
                 pygame.display.update()
-                clock.tick(60)
+                clock.tick(45)
+
+
 
 if __name__ == '__main__':
     main()
