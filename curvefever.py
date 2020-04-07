@@ -264,8 +264,6 @@ class player(pygame.sprite.Sprite):
                     if player.alive:
                         player.points += 1
 
-        print('player {}: {}'.format(self.id, self.points))
-
 
 class effect:
     def __init__(self, cooldown=100, speed=0, thick=0, directionchanger=False, invisible=False, delete_track=False, group='', color=GREEN, name=''):
@@ -340,7 +338,6 @@ def pause(event, paused):
     if event.type == pygame.KEYDOWN:
         if event.key == pygame.K_SPACE:
             paused = not paused
-            print(paused)
     return paused
 
 def exit_game(event, paused):
@@ -350,28 +347,73 @@ def exit_game(event, paused):
                 return True
     return False
 
-def display_points(screen,nx,npbox,ny, players):
+def display_points(screen,nx,npbox,ny, players,points2win):
 
     fontsize = 25
     font = pygame.font.Font('freesansbold.ttf', fontsize)
 
+
+
     iy = 0 + ny // 10
+
+    text = font.render('Points to win: {}'.format(points2win), True, RED, BLACK)
+    textRect = text.get_rect()
+    textRect.center = (nx + npbox // 2, iy)
+    screen.blit(text, textRect)
+
+    iy += fontsize * 2
+
+
+    point_list = []
+    player_list = []
     for iplyr in players:
-        text = font.render('Player{}: {}'.format(iplyr.id,iplyr.points), True, iplyr.color, BLACK)
-        textRect = text.get_rect()
-        textRect.center = (nx + npbox // 2, iy)
-        screen.blit(text, textRect)
+        point_list.append(iplyr.points)
+        player_list.append(iplyr.id)
+    sorted_points, sorted_players = zip(*sorted(zip(point_list, player_list)))
 
-        iy += fontsize
+    for jplyr in sorted_players[::-1]:
+        for iplyr in players:
+            if jplyr == iplyr.id:
+                print(iplyr)
+                text = font.render('Player{}: {}'.format(iplyr.id,iplyr.points), True, iplyr.color, BLACK)
+                textRect = text.get_rect()
+                textRect.center = (nx + npbox // 2, iy)
+                screen.blit(text, textRect)
 
-def main():
+                iy += fontsize
+
+def check_points_victory(players, points_for_victory):
+    for iplyr in players:
+        if iplyr.points >= points_for_victory:
+            return True
+
+def display_victory(screen,nx,ny,players):
+    fontsize = 25
+    font = pygame.font.Font('freesansbold.ttf', fontsize)
+
+    point_list = []
+    player_list = []
+    for iplyr in players:
+        point_list.append(iplyr.points)
+        player_list.append(iplyr.id)
+    sorted_points, sorted_players = zip(*sorted(zip(point_list, player_list)))
+
+    text = font.render('VICTORY for Player{} with {} points'.format(sorted_players[-1],sorted_points[-1]), True, GREEN, BLACK)
+    textRect = text.get_rect()
+    textRect.center = (nx // 2, ny // 2)
+    screen.blit(text, textRect)
+
+
+def curvefever(l_learning):
     # Initialise the game
     pygame.init()
 
     # Set parameters for the game size
-    npbox = 200
+    npbox = 250
     nx    = 600
     ny    = 600
+
+    points2win = 10
 
     flags = DOUBLEBUF
 
@@ -382,7 +424,7 @@ def main():
     gamefield = field(nx=nx, ny=ny, thick=5, color=YELLOW)
 
     # Dictionary for points
-    points = {1:0, 2:0}
+    points = {1:0, 2:0, 3:0, 4:0, 5:0}
 
     matchdone = False
     while not matchdone:
@@ -399,8 +441,11 @@ def main():
 
         # Generate player
         players = pygame.sprite.Group()
-        players.add(player(id=1, points=points[1], posx=random.randint(0,gamefield.nx), posy=random.randint(0,gamefield.ny), thick=3, speed=1.8, dir=random.randint(0,360), dirspeed=3.0, color=RED, controls = {'left' : pygame.K_l, 'right': pygame.K_p}))
-        players.add(player(id=2, points=points[2], posx=random.randint(0,gamefield.nx), posy=random.randint(0,gamefield.ny), thick=3, speed=1.8, dir=random.randint(0,360), dirspeed=3.0, color=GREEN, controls = {'left' : pygame.K_a, 'right': pygame.K_s}))
+        players.add(player(id=1, points=points[1], posx=random.randint(0+gamefield.nx // 10 ,gamefield.nx - gamefield.nx // 10 ), posy=random.randint(0+gamefield.ny//10,gamefield.ny-gamefield.ny//10), thick=3, speed=1.8, dir=random.randint(0,360), dirspeed=3.0, color=RED, controls = {'left' : pygame.K_q, 'right': pygame.K_w}))
+        players.add(player(id=2, points=points[2], posx=random.randint(0+gamefield.nx // 10 ,gamefield.nx - gamefield.nx // 10 ), posy=random.randint(0+gamefield.ny//10,gamefield.ny-gamefield.ny//10), thick=3, speed=1.8, dir=random.randint(0,360), dirspeed=3.0, color=GREEN, controls = {'left' : pygame.K_a, 'right': pygame.K_s}))
+        players.add(player(id=3, points=points[3], posx=random.randint(0+gamefield.nx // 10 ,gamefield.nx - gamefield.nx // 10 ), posy=random.randint(0+gamefield.ny//10,gamefield.ny-gamefield.ny//10), thick=3, speed=1.8, dir=random.randint(0,360), dirspeed=3.0, color=YELLOW, controls = {'left' : pygame.K_d, 'right': pygame.K_f}))
+        players.add(player(id=4, points=points[4], posx=random.randint(0+gamefield.nx // 10 ,gamefield.nx - gamefield.nx // 10 ), posy=random.randint(0+gamefield.ny//10,gamefield.ny-gamefield.ny//10), thick=3, speed=1.8, dir=random.randint(0,360), dirspeed=3.0, color=BLUE, controls = {'left' : pygame.K_g, 'right': pygame.K_h}))
+        players.add(player(id=5, points=points[5], posx=random.randint(0+gamefield.nx // 10 ,gamefield.nx - gamefield.nx // 10 ), posy=random.randint(0+gamefield.ny//10,gamefield.ny-gamefield.ny//10), thick=3, speed=1.8, dir=random.randint(0,360), dirspeed=3.0, color=WHITE, controls = {'left' : pygame.K_j, 'right': pygame.K_k}))
 
         # Items is an empty list for starters
         items = pygame.sprite.Group()
@@ -410,7 +455,7 @@ def main():
         #effectlist.append(effect(speed=2,               color=GREEN,            name='self_fast',               group='self'))
         #effectlist.append(effect(directionchanger=True, color=RED,              name='enemy_directionchanger',  group='enemy'))
         #effectlist.append(effect(invisible=True, cooldown=300, color=YELLOW,    name='self_invisible',          group='self'))
-        effectlist.append(effect(thick=9, cooldown=250, color=YELLOW,           name='enemy_fat',               group='enemy'))
+        effectlist.append(effect(thick=9, cooldown=250, color=BLACK,           name='enemy_fat',               group='enemy'))
         #effectlist.append(effect(delete_track=True,     color=BLUE,             name='all_delete_track',        group=['enemy','self']))
 
         # Define the images for the items
@@ -428,10 +473,17 @@ def main():
             for event in pygame.event.get():
 
                 paused   = pause(event, paused)
-                matchdone = exit_game(event,paused)
+                if exit_game(event,paused):
+                    matchdone = True
+
+                if check_points_victory(players, points2win):
+                    if event.key == pygame.K_SPACE:
+                        matchdone = True
+                    pygame.display.update()
 
                 if matchdone:
                     gamedone = True
+                    paused   = True
 
                 if done and not paused:
                     gamedone = True
@@ -452,7 +504,7 @@ def main():
             # Draw the boundary
             gamefield.draw_boundary(screen)
 
-            display_points(screen,nx,npbox,ny,players)
+            display_points(screen,nx,npbox,ny,players,points2win)
 
             # Pause the game until space is hit, but only after 0.5 second
             seconds=(pygame.time.get_ticks()-start_ticks)/1000 #calculate how many seconds
@@ -475,13 +527,17 @@ def main():
                 # End game if all players are dead
                 done = any([player.alive for player in players])==False
 
+                if check_points_victory(players, points2win):
+                    display_victory(screen, nx, ny, players)
+
                 # Update screen
                 #pygame.display.flip()
 
                 pygame.display.update()
                 clock.tick(45)
-
+        if l_learning:
+            points2win=9999999999999
 
 
 if __name__ == '__main__':
-    main()
+    curvefever(True)
